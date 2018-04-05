@@ -39,18 +39,31 @@ function calciumFluorescenceModel(spike_train::Array{Int64,1};  cell_radius::Flo
   baseline_initial_conditions = [m_baseline, 0.0, 0.0, 0.0, 0.0]
   baseline_sim = Sundials.cvode((t, x, xdot) -> molecularODE(t, x, xdot, m_baseline, calcium_rate, m_indicator, m_endogeneous, m_immobile, b_i, m_f_i, b_e, m_f_e, b_im, m_f_im, excitation, release), baseline_initial_conditions, baseline_time)
   # pre-spiking dynamics, ODEs are solved for every millisecond
-  pre_spike_time = model_time[1:spike_indices[1]-1] 
-  pre_spike_initial_conditions = baseline_sim[end,:]
-  pre_spike_sim = Sundials.cvode((t, x, xdot) -> molecularODE(t, x, xdot, m_baseline, calcium_rate, m_indicator, m_endogeneous, m_immobile, b_i, m_f_i, b_e, m_f_e, b_im, m_f_im, excitation, release), pre_spike_initial_conditions, pre_spike_time)
-  # spiking dynamics, discontinuous jump at each spike
-  spiking_sim = pre_spike_sim
-  spiking_sim_time = pre_spike_time
-  for sp in 1:length(spike_indices)-1
-    spike_time = model_time[spike_indices[sp]:spike_indices[sp+1]-1]
-    spike_initial_conditions = [m_peak; spiking_sim[end, 2:end]]
-    spike_sim = Sundials.cvode((t, x, xdot) -> molecularODE(t, x, xdot, m_baseline, calcium_rate, m_indicator, m_endogeneous, m_immobile, b_i, m_f_i, b_e, m_f_e, b_im, m_f_im, excitation, release), spike_initial_conditions, spike_time)
-    spiking_sim = [spiking_sim; spike_sim]
-    spiking_sim_time = [spiking_sim_time; spike_time]
+  if spike_indices[1] > 1 # if there is no spike in the first time bin
+    pre_spike_time = model_time[1:spike_indices[1]-1] 
+    pre_spike_initial_conditions = baseline_sim[end,:]
+    pre_spike_sim = Sundials.cvode((t, x, xdot) -> molecularODE(t, x, xdot, m_baseline, calcium_rate, m_indicator, m_endogeneous, m_immobile, b_i, m_f_i, b_e, m_f_e, b_im, m_f_im, excitation, release), pre_spike_initial_conditions, pre_spike_time)
+    # spiking dynamics, discontinuous jump at each spike
+    spiking_sim = pre_spike_sim
+    spiking_sim_time = pre_spike_time
+    for sp in 1:length(spike_indices)-1
+      spike_time = model_time[spike_indices[sp]:spike_indices[sp+1]-1]
+      spiking_initial_conditions = [m_peak; spiking_sim[end, 2:end]]
+      spike_sim = Sundials.cvode((t, x, xdot) -> molecularODE(t, x, xdot, m_baseline, calcium_rate, m_indicator, m_endogeneous, m_immobile, b_i, m_f_i, b_e, m_f_e, b_im, m_f_im, excitation, release), spiking_initial_conditions, spike_time)
+      spiking_sim = [spiking_sim; spike_sim]
+      spiking_sim_time = [spiking_sim_time; spike_time]
+    end
+  else # if there is a spike in the first time bin
+    spiking_sim = zeros(Float64,(0,5))
+    spiking_sim_time = zeros(Float64, 0)
+    spiking_initial_conditions = [m_peak; baseline_sim[end, 2:end]]
+    for sp in 1:length(spike_indices)-1
+      spike_time = model_time[spike_indices[sp]:spike_indices[sp+1]-1]
+      spike_sim = Sundials.cvode((t, x, xdot) -> molecularODE(t, x, xdot, m_baseline, calcium_rate, m_indicator, m_endogeneous, m_immobile, b_i, m_f_i, b_e, m_f_e, b_im, m_f_im, excitation, release), spiking_initial_conditions, spike_time)
+      spiking_sim = [spiking_sim; spike_sim]
+      spiking_sim_time = [spiking_sim_time; spike_time]
+      spiking_initial_conditions = [m_peak; spiking_sim[end, 2:end]]
+    end
   end
   # dynamics for the last spike until the end of the trail
   last_spike_time = model_time[spike_indices[end]:end]
