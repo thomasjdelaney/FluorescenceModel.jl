@@ -9,10 +9,8 @@ Returns:    model_time, The times at which the model will be solved
             model_indices, the index of each model time point
 """
 function getModelTime(spike_train::Array{Int64,1}, frequency::Float64)
-  solution_increment = 1/frequency
   num_time_points = length(spike_train)
-  model_duration = num_time_points/frequency
-  model_time = collect(solution_increment:solution_increment:model_duration)
+  model_time = collect((1:num_time_points)/frequency)
   spike_indices = findn(spike_train)
   model_indices = collect(1:num_time_points)
   return model_time, spike_indices, model_indices
